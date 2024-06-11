@@ -1,0 +1,30 @@
+{
+  "MainFormat":{
+    "AudioEnable":0,
+    "Video":{
+      "Compression":"H.264",
+      "Resolution":"720P",
+      "BitRate":1024,
+      "VirtualGOP":13,
+      "BitRateControl":"VBR",
+      "FPS":13,
+      "Quality":20,
+      "GOP":13
+    },
+    "VideoEnable":1
+  },
+  "ExtraFormat":{
+    "AudioEnable":0,
+    "Video":{
+      "Compression":"H.264",
+      "Resolution":"480P",
+      "BitRate":512,
+      "VirtualGOP":13,
+      "BitRateControl":"VBR",
+      "FPS":13,
+      "Quality":20,
+      "GOP":13
+    },
+    "VideoEnable":1
+  }
+}

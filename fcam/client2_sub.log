@@ -1,0 +1,11 @@
+- Connecting...
+✔ Connected
+- Subscribing to test/topic1...
+✔ Subscribed to test/topic1
+topic: test/topic1, qos: 0
+Hello from Client1
+⚠ The Broker has actively disconnected, Reason: Session taken over (Code: 142)
+✖ Connection closed
+- Reconnecting...[1/10]
+✔ Connected
+- Subscribing to test/topic1...

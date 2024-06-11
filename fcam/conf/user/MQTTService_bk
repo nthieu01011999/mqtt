@@ -1,0 +1,1 @@
+{"ClientID":"ipx-cam-pc-iot","Enable":true,"Host":"beta-mqtt.fcam.vn","KeepAlive":60,"Password":"camerainfake0134","Port":8883,"Protocol":"mqtt/tls","QOS":1,"Retain":true,"TLSEnable":true,"TLSVersion":"tlsv1.2","Username":"camerainfake0134"}

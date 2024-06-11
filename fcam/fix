@@ -1,0 +1,2 @@
+rm -r mqtt_test.sh
+vi mqtt_test.sh

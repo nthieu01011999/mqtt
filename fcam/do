@@ -1,0 +1,2 @@
+chmod +x mqtt_test.sh
+./mqtt_test.sh

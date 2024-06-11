@@ -1,0 +1,20 @@
+{
+    "Connections": [
+        {
+            "Type": "http",
+            "HttpUrl": "https://camera-http.ftel.vn"
+        },
+        {
+            "Type": "signalling",
+            "SignalingUrl": "ws://42.116.138.38:8089"
+        },
+        {
+            "Type": "stun",
+            "StunUrl": "stun:42.116.138.35:3478"
+        },
+        {
+            "Type": "turn",
+            "TurnUrl": "turn:turnuser:turn456@42.116.138.35:3478"
+        }
+    ]
+}

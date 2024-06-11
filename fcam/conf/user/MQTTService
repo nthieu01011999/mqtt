@@ -1,0 +1,14 @@
+{
+  "Password":"01234560123456hh",
+  "Username":"01234560123456hh",
+  "ClientID":"cam-huynt",
+  "Host":"broker-mqtt.fcam.vn",
+  "Port":8883,
+  "KeepAlive":30,
+  "QOS":1,
+  "Retain":true,
+  "TLSEnable":true,
+  "TLSVersion":"tlsv1.2",
+  "Protocol":"mqtt\/tls",
+  "Enable":true
+}
