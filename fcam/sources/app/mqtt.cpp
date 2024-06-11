@@ -1,6 +1,10 @@
 #include "app_data.h"
 #include "task_list.h"
 #include "mqtt.hpp"
+#include <ctime>
+#include <sstream>
+#include <chrono>
+ 
 
 mqtt::mqtt(mqttTopicCfg_t *mqtt_parameter, mtce_netMQTT_t *mqtt_config) : mosquittopp(mqtt_config->clientID, true) {
 	APP_DBG("[mqtt][CONSTRUCTOR]\n");
@@ -55,7 +59,7 @@ void mqtt::setConnected(bool state) {
 	m_connected = state;
 }
 
-bool mqtt::isConnected(void) {
+bool mqtt::isConnected() {
 	return m_connected;
 }
 
@@ -71,6 +75,13 @@ bool mqtt::subcribePerform(const std::string &topic) {
     return false;
 }
 
+std::string mqtt::getCurrentTimestamp() { // Definition
+    auto now = std::chrono::system_clock::now();
+    auto now_c = std::chrono::system_clock::to_time_t(now);
+    std::ostringstream oss;
+    oss << now_c;
+    return oss.str();
+}
 
 
 void mqtt::on_connect(int rc) {
@@ -90,11 +101,11 @@ void mqtt::on_connect(int rc) {
         }
 
         // Publish a message to the request topic
-        std::string message = "{\"msg\": \"Hello from Client @ APP!\"}";
+        std::string message = "{\"msg\": \"Hello from Client @ APP!\", \"timestamp\": \"" + getCurrentTimestamp() + "\"}";
         if (publishMessage(m_topics.topicRequest, message)) {
-            APP_DBG("[mqtt] Successfully published message to topic [%s]\n", m_topics.topicRequest);
+            // APP_DBG("[mqtt] Successfully published message to topic [%s]\n", m_topics.topicRequest);
         } else {
-            APP_DBG("[mqtt] Failed to publish message to topic [%s]\n", m_topics.topicRequest);
+            // APP_DBG("[mqtt] Failed to publish message to topic [%s]\n", m_topics.topicRequest);
         }
     } else {
         APP_DBG("[MQTT_CONTROL] on_connect ERROR: %d\n", rc);
@@ -105,10 +116,24 @@ void mqtt::on_connect(int rc) {
 
 bool mqtt::publishMessage(const std::string &topic, const std::string &message) {
     if (isConnected()) {
-        return (publish(NULL, topic.c_str(), message.size(), message.c_str(), m_cfg.QOS, false) == MOSQ_ERR_SUCCESS);
+        // Check if message is a reply and avoid republishing it
+        if (message.find("Reply to:") == std::string::npos) {
+            std::string timestampedMessage = message + ", \"timestamp\": \"" + getCurrentTimestamp() + "\"";
+            int result = publish(NULL, topic.c_str(), timestampedMessage.size(), timestampedMessage.c_str(), m_cfg.QOS, false);
+            if (result != MOSQ_ERR_SUCCESS) {
+                APP_DBG("[mqtt] Failed to publish message to topic: %s, error: %s\n", topic.c_str(), mosquitto_strerror(result));
+                return false;
+            }
+            return true;
+        } else {
+            // APP_DBG("[mqtt] Skipped publishing reply to avoid loop: %s\n", message.c_str());
+        }
     }
     return false;
 }
+
+
+
 
 void mqtt::on_publish(int mid) {
 	APP_DBG("[mqtt][on_publish] mid: %d\n", mid);
@@ -120,26 +145,53 @@ void mqtt::on_subscribe(int mid, int qos_count, const int *granted_qos) {
 }
 
 void mqtt::on_message(const struct mosquitto_message *message) {
-    APP_DBG("[mqtt][on_message] topic: %s, payload: %s\n", message->topic, static_cast<char*>(message->payload));
-
     if (message->payloadlen > 0) {
+        // Convert the payload to a string
         std::string payload(static_cast<char*>(message->payload), message->payloadlen);
-        
-        // Process the message based on the topic
-        if (strcmp(message->topic, m_topics.topicRequest) == 0) {
-            APP_DBG("[mqtt][on_message] Processing message for topicRequest: %s\n", payload.c_str());
-            // Process the payload
-        } else if (strcmp(message->topic, m_topics.topicResponse) == 0) {
-            APP_DBG("[mqtt][on_message] Processing message for topicResponse: %s\n", payload.c_str());
-            // Process the payload
-        } else if (strcmp(message->topic, m_topics.topicStatus) == 0) {
-            APP_DBG("[mqtt][on_message] Processing message for topicStatus: %s\n", payload.c_str());
-            // Process the payload
+
+        // Log the received message for debugging
+        APP_DBG("[mqtt][on_message] Received message on topic: %s, payload: %s\n", message->topic, payload.c_str());
+
+        // Get the current timestamp
+        std::string timestamp = getCurrentTimestamp();
+
+        // Check if the message already contains a reply to avoid loops
+        if (payload.find("Reply to:") == std::string::npos) {
+            std::string replyMessage = "{\"msg\": \"Reply to: " + payload + "\", \"timestamp\": \"" + timestamp + "\"}";
+
+            // Publish the reply message to the appropriate topic
+            if (strcmp(message->topic, "example/request") == 0) {
+                APP_DBG("[mqtt][on_message] Publishing reply to 'example/response': %s\n", replyMessage.c_str());
+                publishMessage("example/response", replyMessage);
+            } else if (strcmp(message->topic, "example/response") == 0) {
+                APP_DBG("[mqtt][on_message] Publishing reply to 'example/request': %s\n", replyMessage.c_str());
+                publishMessage("example/request", replyMessage);
+            } else {
+                APP_DBG("[mqtt][on_message] Received message on an unknown topic: %s\n", message->topic);
+            }
         } else {
-            APP_DBG("[mqtt][on_message] Unknown topic: %s\n", message->topic);
+            APP_DBG("[mqtt][on_message] Skipping message to avoid loop: %s\n", payload.c_str());
         }
+    } else {
+        APP_DBG("[mqtt][on_message] Received empty message on topic: %s\n", message->topic);
     }
 }
+
+
+
+
+void mqtt::handleIncomingMessage(const std::string &topic, const std::string &message) {
+    // Determine the correct topic for replies
+    std::string replyTopic = (topic == m_topics.topicRequest) ? m_topics.topicResponse : m_topics.topicRequest;
+
+    // Create reply message
+    std::string reply = "{\"msg\": \"Reply to: " + message + "\"}";
+    APP_DBG("Publishing reply message to %s: %s\n", replyTopic.c_str(), reply.c_str());
+
+    // Publish reply
+    publishMessage(replyTopic, reply);
+}
+
 
 void mqtt::on_disconnect(int rc) {
     APP_DBG("[MQTT] Disconnected from broker with return code: %d\n", rc);
@@ -147,4 +199,27 @@ void mqtt::on_disconnect(int rc) {
         APP_DBG("[MQTT] Unexpected disconnection, reason: %s\n", mosquitto_strerror(rc));
     }
     setConnected(false);
+}
+
+void mqtt::interactiveChat() {
+    std::string userInput;
+    while (true) {
+        std::cout << "Type a message to send: \n";
+        std::getline(std::cin, userInput);
+        if (userInput.empty()) continue;
+
+        if (!publishMessage("example/request", userInput)) {
+            std::cout << "Failed to send message. Try again." << std::endl;
+        } else {
+            // std::cout << "Message sent: " << userInput << std::endl;
+        }
+    }
+}
+
+void mqtt::startClient() {
+    // Wait until the client is connected
+    while (!isConnected()) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
+    interactiveChat();
 }

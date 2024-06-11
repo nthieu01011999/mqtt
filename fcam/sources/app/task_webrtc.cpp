@@ -39,7 +39,7 @@ void safe_ak_msg_free(ak_msg_t *msg);
 
 q_msg_t gw_task_webrtc_mailbox;
 unique_ptr<mqtt> mospp;
-
+std::atomic<bool> isConnected(false);
 static bool mqttInitialized = false;
 static mtce_netMQTT_t mqttService = {0};
 static mqttTopicCfg_t mqttTopics;
@@ -69,51 +69,45 @@ void printMQTTConfig(const mtce_netMQTT_t *mqttConfig) {
 }
 
 void *gw_task_webrtc_entry(void *) {
+    wait_all_tasks_started();
+    APP_DBG("[STARTED] gw_task_webrtc_entry\n");
 
-	wait_all_tasks_started();
-	APP_DBG("[STARTED] gw_task_webrtc_entry\n");
+    ak_msg_t *msg = AK_MSG_NULL;
 
-	ak_msg_t *msg = AK_MSG_NULL;
+    task_post_pure_msg(GW_TASK_WEBRTC_ID, GW_CLOUD_MQTT_INIT_REQ);
 
+    initializeMQTTConfig(&mqttConfig);
+    initializeMQTTTopicConfig(&topicConfig);
+    printMQTTConfig(&mqttConfig);
+    printMQTTTopicConfig(&topicConfig);
 
+    mospp.reset(new mqtt(&topicConfig, &mqttConfig));
 
-	task_post_pure_msg(GW_TASK_WEBRTC_ID, GW_CLOUD_MQTT_INIT_REQ);
-	
+    std::thread clientThread(&mqtt::startClient, mospp.get());
+    clientThread.detach();
+
+    // Main loop to handle messages or other tasks
     while (1) {
-        // Retrieve message from mailbox
-        // ak_msg_t *msg = ak_msg_rev(GW_TASK_WEBRTC_ID);
-        msg = ak_msg_rev(GW_TASK_WEBRTC_ID);
-
-        // Check if message is not NULL before processing
+        ak_msg_t *msg = ak_msg_rev(GW_TASK_WEBRTC_ID);
         if (msg != NULL) {
-            /* get message */
             switch (msg->header->sig) {
-            case GW_CLOUD_MQTT_INIT_REQ: {
-                APP_DBG_SIG("GW_CLOUD_MQTT_INIT_REQ\n");
-				initializeMQTTConfig(&mqttConfig);
-				initializeMQTTTopicConfig(&topicConfig);
-				printMQTTConfig(&mqttConfig);
-				printMQTTTopicConfig(&topicConfig);
-				mospp.reset(new mqtt(&topicConfig, &mqttConfig));
-				if (mospp->connectBroker()) {
-					APP_DBG("[SUCCESS] Connected to EMQX Broker!\n");
-				} else {
-					APP_DBG("[ERROR] Could not connect to EMQX Broker.\n");
-				}
-				
-            } break;
-
-            default:
-                break;
+                case GW_CLOUD_MQTT_INIT_REQ:
+                    APP_DBG_SIG("GW_CLOUD_MQTT_INIT_REQ\n");
+                    if (mospp->connectBroker()) {
+                        APP_DBG("[SUCCESS] Connected to EMQX Broker!\n");
+                    } else {
+                        APP_DBG("[ERROR] Could not connect to EMQX Broker.\n");
+                    }
+                    break;
+                default:
+                    break;
             }
-
-            /* free message */
             safe_ak_msg_free(msg);
         }
     }
-
-	return (void *)0;
+    return (void *)0;
 }
+
 
  void safe_ak_msg_free(ak_msg_t *msg) {
 	if (msg) {

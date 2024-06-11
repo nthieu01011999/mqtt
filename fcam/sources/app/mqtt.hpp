@@ -23,14 +23,19 @@ public:
 		mosqpp::lib_cleanup();
 		APP_DBG("~mqtt() called\n");
 	}
-	
+
+	void interactiveChat();
+
+	void startClient();
+
+	void handleIncomingMessage(const std::string &topic, const std::string &message);
     bool connectBroker();
 	bool subcribePerform(const std::string &topic);
 	bool publishMessage(const std::string &topic, const std::string &message);
 	
 	// getter and setter
 	void setConnected(bool state);
-	bool isConnected(void);
+	bool isConnected();
 	int *genMsgId();
 
 	// Callback functions
@@ -44,6 +49,7 @@ public:
  
 
 private:
+	std::string getCurrentTimestamp();
 	// store topic: default it will sub 1 topic when MQTT is connected
 	mtce_netMQTT_t m_cfg;
 	mqttTopicCfg_t m_topics;
