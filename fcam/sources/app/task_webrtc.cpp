@@ -125,9 +125,17 @@ void initializeMQTTTopicConfig(mqttTopicCfg_t *topicConfig) {
 }
 
 void initializeMQTTConfig(mtce_netMQTT_t *mqttConfig) {
-    strcpy(mqttConfig->clientID, "c02i24010000008");
+    // strcpy(mqttConfig->clientID, "c02i24010000008");
+    // strcpy(mqttConfig->clientID, "NTHIEU0101");
     // strcpy(mqttConfig->username, "exampleUser");
     // strcpy(mqttConfig->password, "examplePass");
+    std::string userInput;
+    do {
+        APP_DBG("Enter a unique client ID: ");
+        std::getline(std::cin, userInput);    
+    } while(userInput.empty());
+    strcpy(mqttConfig->clientID, userInput.c_str());  
+
     strcpy(mqttConfig->host, "127.0.0.1");  
     mqttConfig->port = 1883;  
     mqttConfig->keepAlive = 60;  

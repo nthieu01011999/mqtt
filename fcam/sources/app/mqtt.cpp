@@ -102,6 +102,7 @@ void mqtt::on_connect(int rc) {
 
         // Publish a message to the request topic
         std::string message = "{\"msg\": \"Hello from Client @ APP!\", \"timestamp\": \"" + getCurrentTimestamp() + "\"}";
+        // std::string message = "{\"msg\": \"Hello from Client @ APP, I AM " + mqttConfig->clientID + "!\", \"timestamp\": \"" + getCurrentTimestamp() + "\"}";
         if (publishMessage(m_topics.topicRequest, message)) {
             // APP_DBG("[mqtt] Successfully published message to topic [%s]\n", m_topics.topicRequest);
         } else {
@@ -211,7 +212,7 @@ void mqtt::interactiveChat() {
         if (!publishMessage("example/request", userInput)) {
             std::cout << "Failed to send message. Try again." << std::endl;
         } else {
-            // std::cout << "Message sent: " << userInput << std::endl;
+            std::cout << "Message sent: " << userInput << std::endl;
         }
     }
 }
