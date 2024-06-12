@@ -4,7 +4,9 @@
 #include <ctime>
 #include <sstream>
 #include <chrono>
- 
+#include <nlohmann/json.hpp>
+
+
 
 mqtt::mqtt(mqttTopicCfg_t *mqtt_parameter, mtce_netMQTT_t *mqtt_config) : mosquittopp(mqtt_config->clientID, true) {
 	APP_DBG("[mqtt][CONSTRUCTOR]\n");
@@ -46,6 +48,7 @@ bool mqtt::connectBroker() {
         APP_DBG("[MQTT] Failed to connect to broker: %s\n", mosquitto_strerror(connectResult));
         return false;
     }
+    
 }
 
 void mqtt::on_log(int level, const char *log_str) {
@@ -116,81 +119,114 @@ void mqtt::on_connect(int rc) {
 
 
 bool mqtt::publishMessage(const std::string &topic, const std::string &message) {
-    if (isConnected()) {
-        // Check if message is a reply and avoid republishing it
-        if (message.find("Reply to:") == std::string::npos) {
-            std::string timestampedMessage = message + ", \"timestamp\": \"" + getCurrentTimestamp() + "\"";
-            int result = publish(NULL, topic.c_str(), timestampedMessage.size(), timestampedMessage.c_str(), m_cfg.QOS, false);
-            if (result != MOSQ_ERR_SUCCESS) {
-                APP_DBG("[mqtt] Failed to publish message to topic: %s, error: %s\n", topic.c_str(), mosquitto_strerror(result));
-                return false;
-            }
-            return true;
-        } else {
-            // APP_DBG("[mqtt] Skipped publishing reply to avoid loop: %s\n", message.c_str());
-        }
+  if (isConnected()) {
+    // Check if message is a reply (optional: avoid republishing replies)
+    if (message.find("Reply to:") == std::string::npos) {
+      // Format message to include client ID and timestamp
+      std::string formattedMessage = message + ", \"clientID\": \"" + 
+                                     mqttConfig.clientID + "\", \"timestamp\": \"" +
+                                     getCurrentTimestamp() + "\"";
+
+      // Publish the formatted message
+      int result = publish(NULL, topic.c_str(), formattedMessage.size(),
+                            formattedMessage.c_str(), m_cfg.QOS, false);
+
+      if (result != MOSQ_ERR_SUCCESS) {
+        APP_DBG("[mqtt] Failed to publish message to topic: %s, error: %s\n",
+                topic.c_str(), mosquitto_strerror(result));
+        return false;
+      }
+      return true;
+    } else {
+      // Optional: log skipped publishing of replies (for debugging)
+      // APP_DBG("[mqtt] Skipped publishing reply to avoid loop: %s\n", message.c_str());
     }
-    return false;
+  }
+  return false;
 }
+
 
 
 
 
 void mqtt::on_publish(int mid) {
-	APP_DBG("[mqtt][on_publish] mid: %d\n", mid);
+	// APP_DBG("[mqtt][on_publish] mid: %d\n", mid);
 }
 
 void mqtt::on_subscribe(int mid, int qos_count, const int *granted_qos) {
 	(void)granted_qos;
-	APP_DBG("[mqtt][on_subscribe] mid:%d\tqos_count:%d\n", mid, qos_count);
+	// APP_DBG("[mqtt][on_subscribe] mid:%d\tqos_count:%d\n", mid, qos_count);
 }
 
 void mqtt::on_message(const struct mosquitto_message *message) {
-    if (message->payloadlen > 0) {
-        // Convert the payload to a string
-        std::string payload(static_cast<char*>(message->payload), message->payloadlen);
+  if (message->payloadlen > 0) {
+    // Convert the payload to a string
+    std::string payload(static_cast<char*>(message->payload), message->payloadlen);
 
-        // Log the received message for debugging
-        APP_DBG("[mqtt][on_message] Received message on topic: %s, payload: %s\n", message->topic, payload.c_str());
+    // Log the received message for debugging
+    
+    // std::string extractedClientId = getClientIdFromPayload(payload);
+    std::string extractedClientId = extractClientID(payload);
+    // Access client ID from member variable (assuming dependency injection)
+    // std::cout << "Client ID from member variable: " << m_mqttConfig->clientID << std::endl;
+    // std::cout << "[2] Client ID from member variable: " << mqttConfig.clientID << std::endl;
+    // std::cout << "[MAIN] Client ID from member variable: " << extractedClientId << std::endl;
+    std::string clientId = mqttConfig.clientID;
 
-        // Get the current timestamp
-        std::string timestamp = getCurrentTimestamp();
+    // Check if message contains our client ID (for filtering)
+    if (extractedClientId == mqttConfig.clientID) {
+        // Skip processing if it's our own message
+        // APP_DBG("[mqtt][on_message] Ignoring self-published message.\n");
+        return;
+    }
+    APP_DBG("[mqtt][on_message] Received message on topic: %s, payload: %s\n", message->topic, payload.c_str());
 
-        // Check if the message already contains a reply to avoid loops
-        if (payload.find("Reply to:") == std::string::npos) {
-            std::string replyMessage = "{\"msg\": \"Reply to: " + payload + "\", \"timestamp\": \"" + timestamp + "\"}";
-
-            // Publish the reply message to the appropriate topic
-            if (strcmp(message->topic, "example/request") == 0) {
-                APP_DBG("[mqtt][on_message] Publishing reply to 'example/response': %s\n", replyMessage.c_str());
-                publishMessage("example/response", replyMessage);
-            } else if (strcmp(message->topic, "example/response") == 0) {
-                APP_DBG("[mqtt][on_message] Publishing reply to 'example/request': %s\n", replyMessage.c_str());
-                publishMessage("example/request", replyMessage);
-            } else {
-                APP_DBG("[mqtt][on_message] Received message on an unknown topic: %s\n", message->topic);
-            }
-        } else {
-            APP_DBG("[mqtt][on_message] Skipping message to avoid loop: %s\n", payload.c_str());
-        }
     } else {
         APP_DBG("[mqtt][on_message] Received empty message on topic: %s\n", message->topic);
     }
 }
 
+std::string mqtt::getClientIdFromPayload(const std::string& payload) {
+  // Assuming the client ID is within a JSON object with key "clientID"
+  std::string key = "\"clientID\":";
+  size_t pos = payload.find(key);
+  if (pos != std::string::npos) {
+    // Extract the value after the key and colon
+    size_t start = pos + key.length() + 1; // Skip key, colon, and quote
+    size_t end = payload.find('"', start);
+    if (end != std::string::npos) {
+      std::string extractedClientId = payload.substr(start, end - start);
+      // Print the extracted client ID
+      std::cout << "Extracted client ID: " << extractedClientId << std::endl;
+      return extractedClientId;
+    }
+  }
+
+  // Client ID not found, print a message and return an empty string
+  std::cout << "Client ID not found in payload" << std::endl;
+  return "";
+}
 
 
+// Separate function to handle incoming message logic
+void mqtt::handleIncomingMessage(const char* topic, const std::string& payload) {
+  // Get the current timestamp
+  std::string timestamp = getCurrentTimestamp();
 
-void mqtt::handleIncomingMessage(const std::string &topic, const std::string &message) {
-    // Determine the correct topic for replies
-    std::string replyTopic = (topic == m_topics.topicRequest) ? m_topics.topicResponse : m_topics.topicRequest;
+  // Check if the message already contains a reply to avoid loops
+  if (payload.find("Reply to:") == std::string::npos) {
+    std::string replyMessage = "{\"msg\": \"Reply to: " + payload + "\", \"timestamp\": \"" + timestamp + "\"}";
 
-    // Create reply message
-    std::string reply = "{\"msg\": \"Reply to: " + message + "\"}";
-    APP_DBG("Publishing reply message to %s: %s\n", replyTopic.c_str(), reply.c_str());
-
-    // Publish reply
-    publishMessage(replyTopic, reply);
+    // Publish the reply message based on topic (assuming dependency injection)
+    if (strcmp(topic, m_topicConfig->topicRequest) == 0) { // Example: reply on request topic
+      APP_DBG("[mqtt][on_message] Publishing reply to 'example/response': %s\n", replyMessage.c_str());
+      publishMessage(m_topicConfig->topicResponse, replyMessage);
+    } else {
+      APP_DBG("[mqtt][on_message] Received message on an unknown topic: %s\n", topic);
+    }
+  } else {
+    APP_DBG("[mqtt][on_message] Skipping message to avoid loop: %s\n", payload.c_str());
+  }
 }
 
 
@@ -223,4 +259,22 @@ void mqtt::startClient() {
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
     interactiveChat();
+}
+
+ 
+
+std::string mqtt::extractClientID(const std::string& payload) {
+    std::string clientIdKey = "\"clientID\": \"";
+    size_t start = payload.find(clientIdKey);
+    if (start == std::string::npos) {
+        return "Client ID not found";
+    }
+
+    start += clientIdKey.length();  // Move start to the beginning of the client ID value
+    size_t end = payload.find("\"", start);  // Find the end of the client ID value
+    if (end == std::string::npos) {
+        return "Invalid payload format";
+    }
+
+    return payload.substr(start, end - start);
 }

@@ -10,6 +10,9 @@
 
 #include "app.h"
 #include "app_dbg.h"
+#include "task_webrtc.h"
+
+extern mtce_netMQTT_t mqttConfig;
 
 class mqtt : public mosqpp::mosquittopp {
 public:
@@ -49,6 +52,7 @@ public:
  
 
 private:
+	std::string extractClientID(const std::string& payload);
 	std::string getCurrentTimestamp();
 	// store topic: default it will sub 1 topic when MQTT is connected
 	mtce_netMQTT_t m_cfg;
@@ -57,6 +61,13 @@ private:
 	std::atomic<bool> m_connected;
 	int lenLastMsg;
 	uint8_t *lastMsgPtr;
+	
+	const mtce_netMQTT_t* m_mqttConfig;
+	const mqttTopicCfg_t* m_topicConfig;
+
+	// Function to handle incoming message logic
+	void handleIncomingMessage(const char* topic, const std::string& payload);
+	std::string getClientIdFromPayload(const std::string& payload);
 };
 
 #endif	  //__MQTT__H__
