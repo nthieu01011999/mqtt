@@ -103,33 +103,52 @@ void mqtt::on_connect(int rc) {
             }
         }
 
+        // Construct JSON message
+        nlohmann::json messageJson;
+        messageJson["msg"] = "Hello from Client @ APP!";
+        messageJson["timestamp"] = getCurrentTimestamp();
+        
+        std::string message = messageJson.dump(); // Serialize JSON to string
+
         // Publish a message to the request topic
-        std::string message = "{\"msg\": \"Hello from Client @ APP!\", \"timestamp\": \"" + getCurrentTimestamp() + "\"}";
-        // std::string message = "{\"msg\": \"Hello from Client @ APP, I AM " + mqttConfig->clientID + "!\", \"timestamp\": \"" + getCurrentTimestamp() + "\"}";
-        if (publishMessage(m_topics.topicRequest, message)) {
-            // APP_DBG("[mqtt] Successfully published message to topic [%s]\n", m_topics.topicRequest);
-        } else {
-            // APP_DBG("[mqtt] Failed to publish message to topic [%s]\n", m_topics.topicRequest);
-        }
-    } else {
+
+        // if (publishMessage(m_topics.topicRequest, message)) {
+        //     APP_DBG("[mqtt] Successfully published message to topic [%s]\n", m_topics.topicRequest);
+        // } else {
+        //     APP_DBG("[mqtt] Failed to publish message to topic [%s]\n", m_topics.topicRequest);
+        // }
+    }
+    else {
         APP_DBG("[MQTT_CONTROL] on_connect ERROR: %d\n", rc);
         setConnected(false);
+    
     }
 }
 
 
+
 bool mqtt::publishMessage(const std::string &topic, const std::string &message) {
   if (isConnected()) {
-    // Check if message is a reply (optional: avoid republishing replies)
     if (message.find("Reply to:") == std::string::npos) {
-      // Format message to include client ID and timestamp
-      std::string formattedMessage = message + ", \"clientID\": \"" + 
-                                     mqttConfig.clientID + "\", \"timestamp\": \"" +
-                                     getCurrentTimestamp() + "\"";
+      json msgJson;
 
-      // Publish the formatted message
+      try {
+        msgJson = json::parse(message);  // Try parsing the message as JSON
+        msgJson["clientID"] = mqttConfig.clientID;
+        msgJson["timestamp"] = getCurrentTimestamp();
+      } catch (json::parse_error&) {
+        // If parsing fails, treat it as plain text and add as content
+        msgJson["content"] = message;
+        msgJson["clientID"] = mqttConfig.clientID;
+        msgJson["timestamp"] = getCurrentTimestamp();
+      }
+
+      std::string formattedMessage = msgJson.dump();
+
+      // Print the formatted message
+    //   APP_DBG("Formatted message to publish: %s\n", formattedMessage.c_str());
       int result = publish(NULL, topic.c_str(), formattedMessage.size(),
-                            formattedMessage.c_str(), m_cfg.QOS, false);
+                           formattedMessage.c_str(), m_cfg.QOS, false);
 
       if (result != MOSQ_ERR_SUCCESS) {
         APP_DBG("[mqtt] Failed to publish message to topic: %s, error: %s\n",
@@ -137,9 +156,6 @@ bool mqtt::publishMessage(const std::string &topic, const std::string &message) 
         return false;
       }
       return true;
-    } else {
-      // Optional: log skipped publishing of replies (for debugging)
-      // APP_DBG("[mqtt] Skipped publishing reply to avoid loop: %s\n", message.c_str());
     }
   }
   return false;
@@ -157,77 +173,99 @@ void mqtt::on_subscribe(int mid, int qos_count, const int *granted_qos) {
 	(void)granted_qos;
 	// APP_DBG("[mqtt][on_subscribe] mid:%d\tqos_count:%d\n", mid, qos_count);
 }
+#include "mqtt.hpp"
+#include <nlohmann/json.hpp>
+using json = nlohmann::json;
 
 void mqtt::on_message(const struct mosquitto_message *message) {
-  if (message->payloadlen > 0) {
-    // Convert the payload to a string
-    std::string payload(static_cast<char*>(message->payload), message->payloadlen);
+    try {
+        if (message->payloadlen > 0) {
+            // Convert the payload to a string
+            std::string payload(static_cast<char*>(message->payload), message->payloadlen);
 
-    // Log the received message for debugging
-    
-    // std::string extractedClientId = getClientIdFromPayload(payload);
-    std::string extractedClientId = extractClientID(payload);
-    // Access client ID from member variable (assuming dependency injection)
-    // std::cout << "Client ID from member variable: " << m_mqttConfig->clientID << std::endl;
-    std::cout << "[2] Client ID from member variable: " << mqttConfig.clientID << std::endl;
-    std::cout << "[MAIN] Client ID from member variable: " << extractedClientId << std::endl;
-    std::string clientId = mqttConfig.clientID;
+            // Log the received message for debugging
+            // APP_DBG("[mqtt][on_message] Received message on topic: %s, payload: %s\n", message->topic, payload.c_str());
 
-    // Check if message contains our client ID (for filtering)
-    if (extractedClientId == mqttConfig.clientID) {
-        // Skip processing if it's our own message
-        // APP_DBG("[mqtt][on_message] Ignoring self-published message.\n");
-        return;
-    }
-    //do not delete it     APP_DBG("[mqtt][on_message] Received message on topic: %s, payload: %s\n", message->topic, payload.c_str());
-    // APP_DBG("[mqtt][on_message] Received message on topic: %s, payload: %s\n", message->topic, payload.c_str());
-    task_post_common_msg(GW_TASK_WEBRTC_ID, GW_CLOUD_HANDLE_INCOME_MESSAGE, (uint8_t*)payload.data(), payload.size());
-    } else {
-        APP_DBG("[mqtt][on_message] Received empty message on topic: %s\n", message->topic);
+            try {
+                // Parse the JSON payload
+                json receivedMsg = json::parse(payload);
+
+                // Extract the client ID
+                std::string extractedClientId = receivedMsg.value("clientID", "Client ID not found");
+
+                // APP_DBG("[DEBUG] clientID talking that: %s\n", extractedClientId.c_str());
+                // APP_DBG("[DEBUG] Current User: %s\n", mqttConfig.clientID);
+
+                // Check if the message was published by this client
+                if (extractedClientId == mqttConfig.clientID) {
+                    // APP_DBG("[DEBUG] Ignoring self-published message.\n");
+                    return; // Skip processing if it's our own message
+                } else {
+                    displayChatMessage(payload);
+                }
+
+            } catch (json::parse_error& e) {
+                APP_ERR("[ERROR] Failed to parse JSON message: %s\n", e.what());
+            } catch (std::exception& e) {
+                APP_ERR("[ERROR] Exception occurred during message handling: %s\n", e.what());
+            }
+        } else {
+            APP_DBG("[mqtt][on_message] Received empty message on topic: %s\n", message->topic);
+        }
+    } catch (std::exception& e) {
+        APP_ERR("[ERROR] Exception occurred in on_message: %s\n", e.what());
+    } catch (...) {
+        APP_ERR("[ERROR] Unknown error occurred in on_message\n");
     }
 }
 
 std::string mqtt::getClientIdFromPayload(const std::string& payload) {
-  // Assuming the client ID is within a JSON object with key "clientID"
-  std::string key = "\"clientID\":";
-  size_t pos = payload.find(key);
-  if (pos != std::string::npos) {
-    // Extract the value after the key and colon
-    size_t start = pos + key.length() + 1; // Skip key, colon, and quote
-    size_t end = payload.find('"', start);
-    if (end != std::string::npos) {
-      std::string extractedClientId = payload.substr(start, end - start);
-      // Print the extracted client ID
-      std::cout << "Extracted client ID: " << extractedClientId << std::endl;
-      return extractedClientId;
+    // Assuming the client ID is within a JSON object with key "clientID"
+    std::string key = "\"clientID\":";
+    size_t pos = payload.find(key);
+    if (pos != std::string::npos) {
+        // Extract the value after the key and colon
+        size_t start = pos + key.length() + 1; // Skip key, colon, and quote
+        size_t end = payload.find('"', start);
+        if (end != std::string::npos) {
+            std::string extractedClientId = payload.substr(start, end - start);
+            // Print the extracted client ID
+            APP_DBG("Extracted client ID: %s\n", extractedClientId.c_str());
+            return extractedClientId;
+        }
     }
-  }
 
-  // Client ID not found, print a message and return an empty string
-  std::cout << "Client ID not found in payload" << std::endl;
-  return "";
+    // Client ID not found, print a message and return an empty string
+    APP_DBG("Client ID not found in payload\n");
+    return "";
 }
 
+void mqtt::displayChatMessage(const std::string& payload) {
+    try {
+        // Parse the JSON payload
+        json receivedMsg = json::parse(payload);
 
-// Separate function to handle incoming message logic
-void mqtt::handleIncomingMessage(const char* topic, const std::string& payload) {
-  // Get the current timestamp
-  std::string timestamp = getCurrentTimestamp();
+        // Extract fields from the payload
+        std::string clientID = receivedMsg.value("clientID", "Unknown");
+        std::string content = receivedMsg.value("content", "No content");
+        std::string timestamp = receivedMsg.value("timestamp", "No timestamp");
 
-  // Check if the message already contains a reply to avoid loops
-  if (payload.find("Reply to:") == std::string::npos) {
-    std::string replyMessage = "{\"msg\": \"Reply to: " + payload + "\", \"timestamp\": \"" + timestamp + "\"}";
+        // Display in chat box format
+        APP_DBG("\n");
+        APP_DBG("*******************************\n");
+        APP_DBG("User: %s\n", clientID.c_str());
+        APP_DBG("Content: %s\n", content.c_str());
+        APP_DBG("Timestamp: %s\n", timestamp.c_str());
+        APP_DBG("*******************************\n");
+        APP_DBG("\n");
 
-    // Publish the reply message based on topic (assuming dependency injection)
-    if (strcmp(topic, m_topicConfig->topicRequest) == 0) { // Example: reply on request topic
-      APP_DBG("[mqtt][on_message] Publishing reply to 'example/response': %s\n", replyMessage.c_str());
-      publishMessage(m_topicConfig->topicResponse, replyMessage);
-    } else {
-      APP_DBG("[mqtt][on_message] Received message on an unknown topic: %s\n", topic);
+    } catch (json::parse_error& e) {
+        APP_ERR("[ERROR] Failed to parse JSON message: %s\n", e.what());
+    } catch (json::type_error& e) {
+        APP_ERR("[ERROR] Type error in JSON message: %s\n", e.what());
+    } catch (std::exception& e) {
+        APP_ERR("[ERROR] Exception while handling message: %s\n", e.what());
     }
-  } else {
-    APP_DBG("[mqtt][on_message] Skipping message to avoid loop: %s\n", payload.c_str());
-  }
 }
 
 
@@ -242,14 +280,14 @@ void mqtt::on_disconnect(int rc) {
 void mqtt::interactiveChat() {
     std::string userInput;
     while (true) {
-        std::cout << "Type a message to send: \n";
+        // std::cout << "Type a message to send: \n";
         std::getline(std::cin, userInput);
         if (userInput.empty()) continue;
 
         if (!publishMessage("example/request", userInput)) {
             std::cout << "Failed to send message. Try again." << std::endl;
         } else {
-            std::cout << "Message sent: " << userInput << std::endl;
+            // std::cout << "Message sent: " << userInput << std::endl;
         }
     }
 }
@@ -279,3 +317,5 @@ std::string mqtt::extractClientID(const std::string& payload) {
 
     return payload.substr(start, end - start);
 }
+
+ 

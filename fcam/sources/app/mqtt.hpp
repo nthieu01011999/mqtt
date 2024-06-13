@@ -26,12 +26,10 @@ public:
 		mosqpp::lib_cleanup();
 		APP_DBG("~mqtt() called\n");
 	}
-
+	void displayChatMessage(const std::string& payload);
 	void interactiveChat();
-
+	void postIncomingMessageToTask(const std::string &payload);
 	void startClient();
-
-	void handleIncomingMessage(const std::string &topic, const std::string &message);
     bool connectBroker();
 	bool subcribePerform(const std::string &topic);
 	bool publishMessage(const std::string &topic, const std::string &message);
@@ -66,7 +64,6 @@ private:
 	const mqttTopicCfg_t* m_topicConfig;
 
 	// Function to handle incoming message logic
-	void handleIncomingMessage(const char* topic, const std::string& payload);
 	std::string getClientIdFromPayload(const std::string& payload);
 };
 

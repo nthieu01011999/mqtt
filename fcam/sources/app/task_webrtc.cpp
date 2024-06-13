@@ -31,6 +31,8 @@
 #include "task_webrtc.h"
 #include "parameter.hpp"
 #include "mqtt.hpp"
+#include <nlohmann/json.hpp>
+using json = nlohmann::json;
 
 mtce_netMQTT_t mqttConfig;
 mqttTopicCfg_t topicConfig;
@@ -100,13 +102,30 @@ void *gw_task_webrtc_entry(void *) {
                     }
                     break; 
                 }
+
                 case GW_CLOUD_HANDLE_INCOME_MESSAGE: {
-                std::string payload(reinterpret_cast<char*>(msg->header->payload), msg->header->len);
-                APP_DBG("[GW_CLOUD_HANDLE_INCOME_MESSAGE][on_message] =========== Received message: %s\n", payload.c_str());
-                // APP_DBG("[GW_CLOUD_HANDLE_INCOME_MESSAGE][on_message] =========== Received message: %s\n", extractedClientId);
+                    std::string payload(reinterpret_cast<char*>(msg->header->payload), msg->header->len);
+                    APP_DBG("[GW_CLOUD_HANDLE_INCOME_MESSAGE][on_message] =========== Received message: %s\n", payload.c_str());
 
-
-                    break; 
+                    // try {
+                    //     json receivedMsg = json::parse(payload);
+                    //     std::string name = receivedMsg["clientID"].get<std::string>();
+                    //     std::string content = receivedMsg["content"].get<std::string>();
+                    //     std::string timestamp = receivedMsg["timestamp"].get<std::string>();
+                        
+                    //     // Print message in chat format
+                    //     std::cout << "Name: " << name << std::endl;
+                    //     std::cout << "Content: " << content << std::endl;
+                    //     std::cout << "Timestamp: " << timestamp << std::endl;
+                    //     std::cout << "----------------------" << std::endl;
+                    // } catch (json::parse_error& e) {
+                    //     APP_DBG("[ERROR] Failed to parse JSON message: %s\n", e.what());
+                    // } catch (json::type_error& e) {
+                    //     APP_DBG("[ERROR] Type error in JSON message: %s\n", e.what());
+                    // } catch (std::exception& e) {
+                    //     APP_DBG("[ERROR] Exception while handling message: %s\n", e.what());
+                    // }
+                    break;
                 }
                 default:
                     break;
