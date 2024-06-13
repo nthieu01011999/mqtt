@@ -169,8 +169,8 @@ void mqtt::on_message(const struct mosquitto_message *message) {
     std::string extractedClientId = extractClientID(payload);
     // Access client ID from member variable (assuming dependency injection)
     // std::cout << "Client ID from member variable: " << m_mqttConfig->clientID << std::endl;
-    // std::cout << "[2] Client ID from member variable: " << mqttConfig.clientID << std::endl;
-    // std::cout << "[MAIN] Client ID from member variable: " << extractedClientId << std::endl;
+    std::cout << "[2] Client ID from member variable: " << mqttConfig.clientID << std::endl;
+    std::cout << "[MAIN] Client ID from member variable: " << extractedClientId << std::endl;
     std::string clientId = mqttConfig.clientID;
 
     // Check if message contains our client ID (for filtering)
@@ -179,8 +179,9 @@ void mqtt::on_message(const struct mosquitto_message *message) {
         // APP_DBG("[mqtt][on_message] Ignoring self-published message.\n");
         return;
     }
-    APP_DBG("[mqtt][on_message] Received message on topic: %s, payload: %s\n", message->topic, payload.c_str());
-
+    //do not delete it     APP_DBG("[mqtt][on_message] Received message on topic: %s, payload: %s\n", message->topic, payload.c_str());
+    // APP_DBG("[mqtt][on_message] Received message on topic: %s, payload: %s\n", message->topic, payload.c_str());
+    task_post_common_msg(GW_TASK_WEBRTC_ID, GW_CLOUD_HANDLE_INCOME_MESSAGE, (uint8_t*)payload.data(), payload.size());
     } else {
         APP_DBG("[mqtt][on_message] Received empty message on topic: %s\n", message->topic);
     }

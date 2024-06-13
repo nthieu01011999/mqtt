@@ -91,14 +91,23 @@ void *gw_task_webrtc_entry(void *) {
         ak_msg_t *msg = ak_msg_rev(GW_TASK_WEBRTC_ID);
         if (msg != NULL) {
             switch (msg->header->sig) {
-                case GW_CLOUD_MQTT_INIT_REQ:
+                case GW_CLOUD_MQTT_INIT_REQ: {
                     APP_DBG_SIG("GW_CLOUD_MQTT_INIT_REQ\n");
                     if (mospp->connectBroker()) {
                         APP_DBG("[SUCCESS] Connected to EMQX Broker!\n");
                     } else {
                         APP_DBG("[ERROR] Could not connect to EMQX Broker.\n");
                     }
-                    break;
+                    break; 
+                }
+                case GW_CLOUD_HANDLE_INCOME_MESSAGE: {
+                std::string payload(reinterpret_cast<char*>(msg->header->payload), msg->header->len);
+                APP_DBG("[GW_CLOUD_HANDLE_INCOME_MESSAGE][on_message] =========== Received message: %s\n", payload.c_str());
+                // APP_DBG("[GW_CLOUD_HANDLE_INCOME_MESSAGE][on_message] =========== Received message: %s\n", extractedClientId);
+
+
+                    break; 
+                }
                 default:
                     break;
             }
