@@ -106,7 +106,7 @@ void *gw_task_webrtc_entry(void *) {
                 case GW_CLOUD_HANDLE_INCOME_MESSAGE: {
                     std::string payload(reinterpret_cast<char*>(msg->header->payload), msg->header->len);
                     APP_DBG("[GW_CLOUD_HANDLE_INCOME_MESSAGE][on_message] =========== Received message: %s\n", payload.c_str());
-
+                    mqtt::displayChatMessage(payload);
                     // try {
                     //     json receivedMsg = json::parse(payload);
                     //     std::string name = receivedMsg["clientID"].get<std::string>();

@@ -5,7 +5,8 @@
 #include <sstream>
 #include <chrono>
 #include <nlohmann/json.hpp>
-
+#include "app.h"
+#include "app_dbg.h"
 
 
 mqtt::mqtt(mqttTopicCfg_t *mqtt_parameter, mtce_netMQTT_t *mqtt_config) : mosquittopp(mqtt_config->clientID, true) {
@@ -180,30 +181,17 @@ using json = nlohmann::json;
 void mqtt::on_message(const struct mosquitto_message *message) {
     try {
         if (message->payloadlen > 0) {
-            // Convert the payload to a string
             std::string payload(static_cast<char*>(message->payload), message->payloadlen);
-
-            // Log the received message for debugging
-            // APP_DBG("[mqtt][on_message] Received message on topic: %s, payload: %s\n", message->topic, payload.c_str());
-
             try {
-                // Parse the JSON payload
                 json receivedMsg = json::parse(payload);
-
-                // Extract the client ID
                 std::string extractedClientId = receivedMsg.value("clientID", "Client ID not found");
-
-                // APP_DBG("[DEBUG] clientID talking that: %s\n", extractedClientId.c_str());
-                // APP_DBG("[DEBUG] Current User: %s\n", mqttConfig.clientID);
-
-                // Check if the message was published by this client
-                if (extractedClientId == mqttConfig.clientID) {
-                    // APP_DBG("[DEBUG] Ignoring self-published message.\n");
-                    return; // Skip processing if it's our own message
-                } else {
-                    displayChatMessage(payload);
+                if (extractedClientId != mqttConfig.clientID) { // Ensuring it's not a message from this client
+                    ak_msg_t *s_msg = get_common_msg(); // Assuming common_msg can carry the payload
+                    set_msg_sig(s_msg, GW_CLOUD_HANDLE_INCOME_MESSAGE);
+                    set_data_common_msg(s_msg, (uint8_t*)payload.c_str(), payload.size());
+                    set_msg_src_task_id(s_msg, GW_TASK_WEBRTC_ID);
+                    task_post(GW_TASK_WEBRTC_ID, s_msg);
                 }
-
             } catch (json::parse_error& e) {
                 APP_ERR("[ERROR] Failed to parse JSON message: %s\n", e.what());
             } catch (std::exception& e) {
@@ -218,6 +206,7 @@ void mqtt::on_message(const struct mosquitto_message *message) {
         APP_ERR("[ERROR] Unknown error occurred in on_message\n");
     }
 }
+
 
 std::string mqtt::getClientIdFromPayload(const std::string& payload) {
     // Assuming the client ID is within a JSON object with key "clientID"

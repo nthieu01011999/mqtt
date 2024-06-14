@@ -26,7 +26,7 @@ public:
 		mosqpp::lib_cleanup();
 		APP_DBG("~mqtt() called\n");
 	}
-	void displayChatMessage(const std::string& payload);
+	static void displayChatMessage(const std::string& payload);
 	void interactiveChat();
 	void postIncomingMessageToTask(const std::string &payload);
 	void startClient();

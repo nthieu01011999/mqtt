@@ -42,7 +42,7 @@ extern "C++" {
 #define TASK_PRI_LEVEL_7 (7)
 #define TASK_PRI_LEVEL_8 (8)
 
-#define AK_COMMON_MSG_DATA_SIZE (64)
+#define AK_COMMON_MSG_DATA_SIZE (256)
 
 typedef void *(*pf_task)(void *);
 
