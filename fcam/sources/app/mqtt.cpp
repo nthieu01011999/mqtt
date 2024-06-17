@@ -7,7 +7,20 @@
 #include <nlohmann/json.hpp>
 #include "app.h"
 #include "app_dbg.h"
+#include <termios.h>
+#include <unistd.h>
+ #include <unordered_map>
+#include <string>
 
+// ANSI color codes
+const std::string RESET = "\033[0m";
+const std::string RED = "\033[31m";
+const std::string GREEN = "\033[32m";
+const std::string YELLOW = "\033[33m";
+const std::string BLUE = "\033[34m";
+const std::string MAGENTA = "\033[35m";
+const std::string CYAN = "\033[36m";
+const std::string WHITE = "\033[37m";
 
 mqtt::mqtt(mqttTopicCfg_t *mqtt_parameter, mtce_netMQTT_t *mqtt_config) : mosquittopp(mqtt_config->clientID, true) {
 	APP_DBG("[mqtt][CONSTRUCTOR]\n");
@@ -186,11 +199,12 @@ void mqtt::on_message(const struct mosquitto_message *message) {
                 json receivedMsg = json::parse(payload);
                 std::string extractedClientId = receivedMsg.value("clientID", "Client ID not found");
                 if (extractedClientId != mqttConfig.clientID) { // Ensuring it's not a message from this client
-                    ak_msg_t *s_msg = get_common_msg(); // Assuming common_msg can carry the payload
-                    set_msg_sig(s_msg, GW_CLOUD_HANDLE_INCOME_MESSAGE);
-                    set_data_common_msg(s_msg, (uint8_t*)payload.c_str(), payload.size());
-                    set_msg_src_task_id(s_msg, GW_TASK_WEBRTC_ID);
-                    task_post(GW_TASK_WEBRTC_ID, s_msg);
+                    // ak_msg_t *s_msg = get_common_msg(); // Assuming common_msg can carry the payload
+                    // set_msg_sig(s_msg, GW_CLOUD_HANDLE_INCOME_MESSAGE);
+                    // set_data_common_msg(s_msg, (uint8_t*)payload.c_str(), payload.size());
+                    // set_msg_src_task_id(s_msg, GW_TASK_WEBRTC_ID);
+                    // task_post(GW_TASK_WEBRTC_ID, s_msg);
+                    task_post_common_msg(GW_TASK_WEBRTC_ID, GW_CLOUD_HANDLE_INCOME_MESSAGE, (uint8_t*)payload.data(), payload.size());
                 }
             } catch (json::parse_error& e) {
                 APP_ERR("[ERROR] Failed to parse JSON message: %s\n", e.what());
@@ -241,11 +255,9 @@ void mqtt::displayChatMessage(const std::string& payload) {
 
         // Display in chat box format
         APP_DBG("\n");
-        APP_DBG("*******************************\n");
         APP_DBG("User: %s\n", clientID.c_str());
         APP_DBG("Content: %s\n", content.c_str());
         APP_DBG("Timestamp: %s\n", timestamp.c_str());
-        APP_DBG("*******************************\n");
         APP_DBG("\n");
 
     } catch (json::parse_error& e) {
@@ -266,20 +278,45 @@ void mqtt::on_disconnect(int rc) {
     setConnected(false);
 }
 
-void mqtt::interactiveChat() {
-    std::string userInput;
-    while (true) {
-        // std::cout << "Type a message to send: \n";
-        std::getline(std::cin, userInput);
-        if (userInput.empty()) continue;
+ 
+ 
 
+void mqtt::disableEcho() {
+    termios tty;
+    tcgetattr(STDIN_FILENO, &tty);
+    tty.c_lflag &= ~ECHO;
+    tcsetattr(STDIN_FILENO, TCSANOW, &tty);
+}
+
+void mqtt::enableEcho() {
+    termios tty;
+    tcgetattr(STDIN_FILENO, &tty);
+    tty.c_lflag |= ECHO;
+    tcsetattr(STDIN_FILENO, TCSANOW, &tty);
+}
+
+void mqtt::interactiveChat() {
+    std::string userInput, userID = m_cfg.clientID; // Assuming clientID is defined in your MQTT config
+    while (true) {
+
+        disableEcho();  // Disable echo
+        std::getline(std::cin, userInput);  // Capture user input silently
+        enableEcho();   // Re-enable echo
+
+        std::string timestamp = getCurrentTimestamp();
+
+        // Print message
+        printMessage(userID, userInput, timestamp);
+
+        // Assume publishMessage handles sending to MQTT broker
         if (!publishMessage("example/request", userInput)) {
-            std::cout << "Failed to send message. Try again." << std::endl;
-        } else {
-            // std::cout << "Message sent: " << userInput << std::endl;
+            std::cout << RED << "Failed to send message. Try again." << RESET << std::endl;
         }
     }
 }
+
+
+
 
 void mqtt::startClient() {
     // Wait until the client is connected
@@ -307,4 +344,30 @@ std::string mqtt::extractClientID(const std::string& payload) {
     return payload.substr(start, end - start);
 }
 
- 
+
+
+// Map to hold user-specific colors
+std::unordered_map<std::string, std::string> userColors;
+
+
+
+// Function to assign a color to a user
+std::string mqtt::getColorForUser(const std::string& userID) {
+    // If user already has a color, return it
+    if (userColors.find(userID) != userColors.end()) {
+        return userColors[userID];
+    }
+
+    // Otherwise, assign a new color randomly
+    std::vector<std::string> colors = {RED, GREEN, YELLOW, BLUE, MAGENTA, CYAN, WHITE};
+    std::string assignedColor = colors[rand() % colors.size()];
+    userColors[userID] = assignedColor;
+    return assignedColor;
+}
+
+void mqtt::printMessage(const std::string& userID, const std::string& content, const std::string& timestamp) {
+    std::string color = getColorForUser(userID);
+    std::cout << color << "User: " << userID << RESET << std::endl
+              << color << "Content: " << content << RESET << std::endl
+              << color << "Timestamp: " << timestamp << RESET << std::endl << std::endl;
+}

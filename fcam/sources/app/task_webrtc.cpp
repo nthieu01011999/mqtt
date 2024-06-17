@@ -105,8 +105,32 @@ void *gw_task_webrtc_entry(void *) {
 
                 case GW_CLOUD_HANDLE_INCOME_MESSAGE: {
                     std::string payload(reinterpret_cast<char*>(msg->header->payload), msg->header->len);
-                    APP_DBG("[GW_CLOUD_HANDLE_INCOME_MESSAGE][on_message] =========== Received message: %s\n", payload.c_str());
-                    mqtt::displayChatMessage(payload);
+                    // APP_DBG("[GW_CLOUD_HANDLE_INCOME_MESSAGE][on_message] =========== Received message: %s\n", payload.c_str());
+                    // mqtt::displayChatMessage(payload);
+                        try {
+                            // Parse the JSON payload
+                            json receivedMsg = json::parse(payload);
+
+                            // Extract fields from the payload
+                            std::string clientID = receivedMsg.value("clientID", "Unknown");
+                            std::string content = receivedMsg.value("content", "No content");
+                            std::string timestamp = receivedMsg.value("timestamp", "No timestamp");
+
+                            // Display in chat box format
+                            cout << "\n";
+                            cout << "User: " << clientID.c_str() << "\n";
+                            cout << "Content: " << content.c_str() << "\n";
+                            cout << "Timestamp: " << timestamp.c_str() << "\n";
+                            cout << "\n";
+
+                            
+                        } catch (json::parse_error& e) {
+                            APP_ERR("[ERROR] Failed to parse JSON message: %s\n", e.what());
+                        } catch (json::type_error& e) {
+                            APP_ERR("[ERROR] Type error in JSON message: %s\n", e.what());
+                        } catch (std::exception& e) {
+                            APP_ERR("[ERROR] Exception while handling message: %s\n", e.what());
+                        }
                     // try {
                     //     json receivedMsg = json::parse(payload);
                     //     std::string name = receivedMsg["clientID"].get<std::string>();

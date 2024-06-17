@@ -26,6 +26,11 @@ public:
 		mosqpp::lib_cleanup();
 		APP_DBG("~mqtt() called\n");
 	}
+
+
+
+	void printMessage(const std::string& userID, const std::string& content, const std::string& timestamp);
+	std::string getColorForUser(const std::string& userID);
 	static void displayChatMessage(const std::string& payload);
 	void interactiveChat();
 	void postIncomingMessageToTask(const std::string &payload);
@@ -33,7 +38,8 @@ public:
     bool connectBroker();
 	bool subcribePerform(const std::string &topic);
 	bool publishMessage(const std::string &topic, const std::string &message);
-	
+	void disableEcho();
+	void enableEcho();
 	// getter and setter
 	void setConnected(bool state);
 	bool isConnected();
