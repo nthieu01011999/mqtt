@@ -15,6 +15,10 @@
 extern mtce_netMQTT_t mqttConfig;
 
 class mqtt : public mosqpp::mosquittopp {
+
+	static std::unordered_map<std::string, std::string> userColors;
+	static std::mutex colorMutex;  // Mutex for thread safety
+	
 public:
 	mqtt(mqttTopicCfg_t *mqtt_parameter, mtce_netMQTT_t *mqtt_config);
 	~mqtt() {
@@ -29,8 +33,8 @@ public:
 
 
 
-	void printMessage(const std::string& userID, const std::string& content, const std::string& timestamp);
-	std::string getColorForUser(const std::string& userID);
+	static void printMessage(const std::string& userID, const std::string& content, const std::string& timestamp);
+	static std::string getColorForUser(const std::string& userID);
 	static void displayChatMessage(const std::string& payload);
 	void interactiveChat();
 	void postIncomingMessageToTask(const std::string &payload);

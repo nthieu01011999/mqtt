@@ -1,3 +1,4 @@
+#include <mutex>
 #include "app_data.h"
 #include "task_list.h"
 #include "mqtt.hpp"
@@ -11,6 +12,9 @@
 #include <unistd.h>
  #include <unordered_map>
 #include <string>
+
+std::mutex mqtt::colorMutex;  // Initialize the static mutex
+std::unordered_map<std::string, std::string> mqtt::userColors;
 
 // ANSI color codes
 const std::string RESET = "\033[0m";
@@ -199,11 +203,6 @@ void mqtt::on_message(const struct mosquitto_message *message) {
                 json receivedMsg = json::parse(payload);
                 std::string extractedClientId = receivedMsg.value("clientID", "Client ID not found");
                 if (extractedClientId != mqttConfig.clientID) { // Ensuring it's not a message from this client
-                    // ak_msg_t *s_msg = get_common_msg(); // Assuming common_msg can carry the payload
-                    // set_msg_sig(s_msg, GW_CLOUD_HANDLE_INCOME_MESSAGE);
-                    // set_data_common_msg(s_msg, (uint8_t*)payload.c_str(), payload.size());
-                    // set_msg_src_task_id(s_msg, GW_TASK_WEBRTC_ID);
-                    // task_post(GW_TASK_WEBRTC_ID, s_msg);
                     task_post_common_msg(GW_TASK_WEBRTC_ID, GW_CLOUD_HANDLE_INCOME_MESSAGE, (uint8_t*)payload.data(), payload.size());
                 }
             } catch (json::parse_error& e) {
@@ -353,17 +352,19 @@ std::unordered_map<std::string, std::string> userColors;
 
 // Function to assign a color to a user
 std::string mqtt::getColorForUser(const std::string& userID) {
-    // If user already has a color, return it
+    std::lock_guard<std::mutex> lock(colorMutex);  // Lock the mutex during this operation
     if (userColors.find(userID) != userColors.end()) {
         return userColors[userID];
+    } else {
+        // Assign a new color randomly
+        static const std::vector<std::string> colors = {RED, GREEN, YELLOW, BLUE, MAGENTA, CYAN, WHITE};
+        std::string newColor = colors[rand() % colors.size()];
+        userColors[userID] = newColor;
+        return newColor;
     }
-
-    // Otherwise, assign a new color randomly
-    std::vector<std::string> colors = {RED, GREEN, YELLOW, BLUE, MAGENTA, CYAN, WHITE};
-    std::string assignedColor = colors[rand() % colors.size()];
-    userColors[userID] = assignedColor;
-    return assignedColor;
 }
+
+
 
 void mqtt::printMessage(const std::string& userID, const std::string& content, const std::string& timestamp) {
     std::string color = getColorForUser(userID);

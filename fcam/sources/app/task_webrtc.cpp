@@ -117,12 +117,12 @@ void *gw_task_webrtc_entry(void *) {
                             std::string timestamp = receivedMsg.value("timestamp", "No timestamp");
 
                             // Display in chat box format
-                            cout << "\n";
-                            cout << "User: " << clientID.c_str() << "\n";
-                            cout << "Content: " << content.c_str() << "\n";
-                            cout << "Timestamp: " << timestamp.c_str() << "\n";
-                            cout << "\n";
-
+                            // cout << "\n";
+                            // cout << "User: " << clientID.c_str() << "\n";
+                            // cout << "Content: " << content.c_str() << "\n";
+                            // cout << "Timestamp: " << timestamp.c_str() << "\n";
+                            // cout << "\n";
+                            mqtt::printMessage(clientID, content, timestamp);
                             
                         } catch (json::parse_error& e) {
                             APP_ERR("[ERROR] Failed to parse JSON message: %s\n", e.what());
@@ -131,24 +131,7 @@ void *gw_task_webrtc_entry(void *) {
                         } catch (std::exception& e) {
                             APP_ERR("[ERROR] Exception while handling message: %s\n", e.what());
                         }
-                    // try {
-                    //     json receivedMsg = json::parse(payload);
-                    //     std::string name = receivedMsg["clientID"].get<std::string>();
-                    //     std::string content = receivedMsg["content"].get<std::string>();
-                    //     std::string timestamp = receivedMsg["timestamp"].get<std::string>();
-                        
-                    //     // Print message in chat format
-                    //     std::cout << "Name: " << name << std::endl;
-                    //     std::cout << "Content: " << content << std::endl;
-                    //     std::cout << "Timestamp: " << timestamp << std::endl;
-                    //     std::cout << "----------------------" << std::endl;
-                    // } catch (json::parse_error& e) {
-                    //     APP_DBG("[ERROR] Failed to parse JSON message: %s\n", e.what());
-                    // } catch (json::type_error& e) {
-                    //     APP_DBG("[ERROR] Type error in JSON message: %s\n", e.what());
-                    // } catch (std::exception& e) {
-                    //     APP_DBG("[ERROR] Exception while handling message: %s\n", e.what());
-                    // }
+
                     break;
                 }
                 default:
